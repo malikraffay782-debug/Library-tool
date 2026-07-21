@@ -1,6 +1,70 @@
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::{HashMap, VecDeque};
+use std::io::{self, Write};
+use std::thread;
+use std::time::Duration;
+
+const COLOR_RESET: &str = "\x1b[0m";
+const COLOR_BOLD: &str = "\x1b[1m";
+const COLOR_RED: &str = "\x1b[31m";
+const COLOR_GREEN: &str = "\x1b[32m";
+const COLOR_YELLOW: &str = "\x1b[33m";
+const COLOR_BLUE: &str = "\x1b[34m";
+const COLOR_MAGENTA: &str = "\x1b[35m";
+const COLOR_CYAN: &str = "\x1b[36m";
+
+pub struct TerminalUI;
+
+impl TerminalUI {
+    pub fn clear_screen() {
+        print!("\x1B[2J\x1B[1;1H");
+        io::stdout().flush().unwrap();
+    }
+
+    pub fn draw_banner() {
+        println!("{}{}", COLOR_CYAN, COLOR_BOLD);
+        println!("  _   _ _   _ _______      ________  _____  _____       _      ");
+        println!(" | | | | \\ | |_   _\\ \\    / /  ____|/ ____|/ ____|     | |     ");
+        println!(" | | | |  \\| | | |  \\ \\  / /| |__  | (___ | (___       | |     ");
+        println!(" | | | | . ` | | |   \\ \\/ / |  __|  \\___ \\ \\___ \\      | |     ");
+        println!(" | |_| | |\\  |_| |_   \\  /  | |____ ____) |____) |     | |____ ");
+        println!("  \\___/|_| \\_|_____|   \\/   |______|_____/|_____/      |______|");
+        println!("                                                                 ");
+        println!("================================================================={}", COLOR_RESET);
+    }
+
+    pub fn draw_loading_bar(task: &str, duration_ms: u64) {
+        print!("{}{:<30} [{}", COLOR_YELLOW, task, COLOR_RESET);
+        io::stdout().flush().unwrap();
+        
+        let steps = 20;
+        let sleep_time = duration_ms / steps as u64;
+        
+        for _ in 0..steps {
+            print!("{}#{}", COLOR_GREEN, COLOR_RESET);
+            io::stdout().flush().unwrap();
+            thread::sleep(Duration::from_millis(sleep_time));
+        }
+        println!("{}] {}DONE{}", COLOR_YELLOW, COLOR_GREEN, COLOR_RESET);
+    }
+
+    pub fn print_status(component: &str, status: &str, is_ok: bool) {
+        let color = if is_ok { COLOR_GREEN } else { COLOR_RED };
+        let icon = if is_ok { "[+]" } else { "[-]" };
+        println!("{}{}{} {:<25} : {}{}{}", COLOR_BOLD, color, icon, component, COLOR_RESET, color, status);
+    }
+
+    pub fn draw_panel_header(title: &str) {
+        println!("\n{}{}+{}+{}", COLOR_BLUE, COLOR_BOLD, "-".repeat(60), COLOR_RESET);
+        println!("{}|{}{} {:^58} {}|{}", COLOR_BLUE, COLOR_BOLD, COLOR_CYAN, title, COLOR_BLUE, COLOR_RESET);
+        println!("{}{}+{}+{}", COLOR_BLUE, COLOR_BOLD, "-".repeat(60), COLOR_RESET);
+    }
+
+    pub fn draw_panel_footer() {
+        println!("{}{}+{}+{}\n", COLOR_BLUE, COLOR_BOLD, "-".repeat(60), COLOR_RESET);
+    }
+}
 
 pub trait Subsystem {
     fn initialize(&mut self) -> Result<(), String>;
@@ -45,7 +109,7 @@ impl Subsystem for SecurityKernel {
         Ok(())
     }
     fn execute_cycle(&mut self) -> Result<String, String> {
-        Ok(format!("KERNEL_STATE_HASH_{:X}", self.kernel_state))
+        Ok(format!("HASH_{:X}", self.kernel_state))
     }
     fn shutdown(&mut self) {
         self.entropy_pool.clear();
@@ -77,11 +141,11 @@ impl Subsystem for NetworkNode {
     }
     fn execute_cycle(&mut self) -> Result<String, String> {
         let mut processed = 0;
-        for _ in 0..10 {
+        for _ in 0..15 {
             self.packet_queue.push(0xFF);
             processed += 1;
         }
-        Ok(format!("PROCESSED_PACKETS_{}", processed))
+        Ok(format!("PKT_SYNC_{}", processed))
     }
     fn shutdown(&mut self) {
         self.connected_peers.clear();
@@ -99,7 +163,6 @@ impl AutomationEngine {
         let mut registry = HashMap::new();
         registry.insert(100, String::from("DATA_AGGREGATION"));
         registry.insert(101, String::from("SYSTEM_OPTIMIZATION"));
-        registry.insert(102, String::from("RESOURCE_ALLOCATION"));
         AutomationEngine {
             task_registry: registry,
             current_tick: 0,
@@ -114,7 +177,7 @@ impl Subsystem for AutomationEngine {
     }
     fn execute_cycle(&mut self) -> Result<String, String> {
         self.current_tick += 1;
-        Ok(format!("TICK_{}_COMPLETED", self.current_tick))
+        Ok(format!("TICK_{}_OK", self.current_tick))
     }
     fn shutdown(&mut self) {
         self.task_registry.clear();
@@ -136,13 +199,15 @@ impl DonationSystem {
         }
     }
     pub fn display(&self) {
-        println!("============================================================");
-        println!("                SUPPORT THE DEVELOPMENT TEAM                ");
-        println!("============================================================");
-        println!("PAYMENT RULES : {}", self.rules);
-        println!("PRIVACY       : {}", self.kyc);
-        println!("SOLANA WALLET : {}", self.solana_address);
-        println!("============================================================\n");
+        println!("\n{}{}+{}+{}", COLOR_MAGENTA, COLOR_BOLD, "=".repeat(60), COLOR_RESET);
+        println!("{}|{}{} {:^58} {}|{}", COLOR_MAGENTA, COLOR_BOLD, COLOR_YELLOW, "SUPPORT THE DEVELOPMENT TEAM", COLOR_MAGENTA, COLOR_RESET);
+        println!("{}{}+{}+{}", COLOR_MAGENTA, COLOR_BOLD, "=".repeat(60), COLOR_RESET);
+        
+        println!("{}  PAYMENT RULES : {}{}{}", COLOR_CYAN, COLOR_GREEN, COLOR_BOLD, self.rules);
+        println!("{}  PRIVACY       : {}{}{}", COLOR_CYAN, COLOR_GREEN, COLOR_BOLD, self.kyc);
+        println!("{}  SOLANA WALLET : {}{}{}", COLOR_CYAN, COLOR_YELLOW, COLOR_BOLD, self.solana_address);
+        
+        println!("{}{}+{}+{}\n", COLOR_MAGENTA, COLOR_BOLD, "=".repeat(60), COLOR_RESET);
     }
 }
 
@@ -164,35 +229,43 @@ impl MasterController {
     }
 
     pub fn boot(&mut self) {
-        println!(">>> INITIATING MASTER CONTROLLER BOOT SEQUENCE...\n");
+        TerminalUI::clear_screen();
+        TerminalUI::draw_banner();
         
+        println!("{}{}\n>>> INITIATING BOOT SEQUENCE...{}\n", COLOR_MAGENTA, COLOR_BOLD, COLOR_RESET);
+        
+        TerminalUI::draw_loading_bar("Mounting Security Kernel", 600);
         if let Ok(_) = self.security.initialize() {
-            println!("[+] Security Kernel Initialized.");
+            TerminalUI::print_status("Security Subsystem", "ONLINE", true);
         }
+
+        TerminalUI::draw_loading_bar("Establishing Network Nodes", 800);
         if let Ok(_) = self.network.initialize() {
-            println!("[+] Network Node Initialized.");
+            TerminalUI::print_status("Network Subsystem", "ONLINE", true);
         }
+
+        TerminalUI::draw_loading_bar("Waking Automation Engine", 500);
         if let Ok(_) = self.automation.initialize() {
-            println!("[+] Automation Engine Initialized.");
+            TerminalUI::print_status("Automation Subsystem", "ONLINE", true);
         }
         
-        println!("\n>>> SYSTEM FULLY OPERATIONAL.\n");
+        println!("\n{}{}[!] ALL SYSTEMS FULLY OPERATIONAL.{}\n", COLOR_GREEN, COLOR_BOLD, COLOR_RESET);
     }
 
     pub fn run_diagnostics(&mut self) {
-        println!(">>> RUNNING SUBSYSTEM DIAGNOSTICS...\n");
+        TerminalUI::draw_panel_header("SUBSYSTEM DIAGNOSTICS");
         
         if let Ok(res) = self.security.execute_cycle() {
-            println!("    SECURITY   -> {}", res);
+            println!("  {}SECURITY_CORE{}   -> {}{}{}", COLOR_CYAN, COLOR_RESET, COLOR_YELLOW, res, COLOR_RESET);
         }
         if let Ok(res) = self.network.execute_cycle() {
-            println!("    NETWORK    -> {}", res);
+            println!("  {}NETWORK_CORE{}    -> {}{}{}", COLOR_CYAN, COLOR_RESET, COLOR_YELLOW, res, COLOR_RESET);
         }
         if let Ok(res) = self.automation.execute_cycle() {
-            println!("    AUTOMATION -> {}", res);
+            println!("  {}AUTOMATION_CORE{} -> {}{}{}", COLOR_CYAN, COLOR_RESET, COLOR_YELLOW, res, COLOR_RESET);
         }
         
-        println!("\n>>> DIAGNOSTICS COMPLETE.\n");
+        TerminalUI::draw_panel_footer();
     }
 
     pub fn execute_cli_commands(&mut self, args: Vec<String>) {
@@ -220,7 +293,7 @@ impl MasterController {
                 self.donation.display();
             }
             _ => {
-                println!("UNKNOWN COMMAND. FALLING BACK TO DEFAULT STARTUP.\n");
+                println!("{}{}UNKNOWN COMMAND. FALLING BACK TO DEFAULT.{}\n", COLOR_RED, COLOR_BOLD, COLOR_RESET);
                 self.boot();
                 self.run_diagnostics();
                 self.donation.display();
